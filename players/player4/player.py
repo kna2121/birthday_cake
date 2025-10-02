@@ -144,7 +144,6 @@ class Player4(Player):
         
         # Keep only cuts where both subpieces are bigger than one final piece in area
         # Each final piece can have a 0.5 unit^2 area tolerance
-        children_per_subpiece = children - 1
         for from_p, to_p in cuts:
             line = LineString([from_p, to_p])
             split_pieces = split(piece, line)
