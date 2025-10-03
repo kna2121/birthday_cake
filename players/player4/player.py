@@ -1,10 +1,12 @@
-from shapely import Point, Polygon
+from shapely import Point, Polygon, LineString
+from shapely.ops import split
 from shapely.affinity import scale
 from typing import Literal
 
 from players.player import Player
 from src.cake import Cake
 import src.constants as c
+import os
 
 
 class Player4(Player):
@@ -16,36 +18,70 @@ class Player4(Player):
         self.current_cake_to_cut = cake
 
         print(f"Ideal area per piece: {self.ideal_area_per_piece}")
-        print(self.cake_boundary)
         print(cake.get_boundary_points())
         print(self._is_cake_symmetric())
 
 
-    def get_cuts(self) -> list[tuple[Point, Point]]:
-        cuts_res = []
+    # def get_cuts(self) -> list[tuple[Point, Point]]:
+    #     cuts_res = []
         
-        # cut until I have piece with 1/n area and another n-1/n area
-        # then repeat the same with n-1/n piece
-        for cut in range(1, self.total_cuts+1):
-            print(f"Making cut {cut}/{self.total_cuts}")
-            a, b = self._find_proper_cut(self.children - cut)
-            cuts_res.append((a, b))
-            self.cake.cut(a, b)
-            # print(self.current_cake_to_cut.exterior_pieces[0].boundary, self.current_cake_to_cut.exterior_pieces[1].boundary)
-            self.current_cake_to_cut = max(self.cake.exterior_pieces, key=lambda p: p.area) 
-            # Comment: it doesn't have to be the second piece, this is only true bc we cut vertically from left to right
-            print(f"Current cake border: {self.current_cake_to_cut.boundary}")
-        return cuts_res
+    #     # cut until I have piece with 1/n area and another n-1/n area
+    #     # then repeat the same with n-1/n piece
+    #     for cut in range(1, self.total_cuts+1):
+    #         print(f"Making cut {cut}/{self.total_cuts}")
+    #         a, b = self._find_proper_cut(self.children - cut)
+    #         cuts_res.append((a, b))
+    #         self.cake.cut(a, b)
+    #         # print(self.current_cake_to_cut.exterior_pieces[0].boundary, self.current_cake_to_cut.exterior_pieces[1].boundary)
+    #         self.current_cake_to_cut = max(self.cake.exterior_pieces, key=lambda p: p.area) 
+    #         # Comment: it doesn't have to be the second piece, this is only true bc we cut vertically from left to right
+    #         print(f"Current cake border: {self.current_cake_to_cut.boundary}")
+    #     return cuts_res
+
+    def _cut_rectangle_even(self):
+        # find cut through center of cake first
+        cake_centroid = self.cake.exterior_shape.centroid
+        minx, miny, maxx, maxy = self.cake.exterior_shape.bounds
+
+        cuts = []
+
+        cut_middle = LineString([(cake_centroid.x, miny), (cake_centroid.x, maxy)])
+        cuts.append((Point(cut_middle.coords[0]), Point(cut_middle.coords[1])))
+        if self.children == 2:
+            return cuts
+        
+        if self.children == 4:
+            # cut vertically first, then horizontally on each side
+            left_piece, right_piece = split(self.cake.exterior_shape, cut_middle).geoms
+            left_centroid = left_piece.centroid
+            right_centroid = right_piece.centroid
+
+            cut_left = LineString([(minx, left_centroid.y), (cake_centroid.x, left_centroid.y)])
+            cuts.append((Point(cut_left.coords[0]), Point(cut_left.coords[1])))
+
+            cut_right = LineString([(cake_centroid.x, right_centroid.y), (maxx, right_centroid.y)])
+            cuts.append((Point(cut_right.coords[0]), Point(cut_right.coords[1])))
+
+            return cuts
+
+    
+    def get_cuts(self) -> list[tuple[Point, Point]]:
+        piece: Polygon = self.cake.exterior_shape
+        if os.path.basename(self.cake_path) == "rectangle.csv":
+            return self._cut_rectangle_even()
+        print(f"Player 4: Starting DFS for {self.children} children.")
+        return self.DFS(piece, self.children)
+
 
     def _is_cake_symmetric(self) -> Literal['symmetric_x', 'symmetric_y', 'symmetric_both', False]:
         cake_centroid = self.cake.exterior_shape.centroid
-        cake_boundary_points = {Point(c) for c in self.cake.exterior_shape.boundary.coords}
+        cake_boundary_points = {Point(co) for co in self.cake.exterior_shape.boundary.coords}
 
         cake_reflected_x = scale(self.cake.exterior_shape, xfact=1, yfact=-1, origin=(cake_centroid.x, cake_centroid.y))
         cake_reflected_y = scale(self.cake.exterior_shape, xfact=-1, yfact=1, origin=(cake_centroid.x, cake_centroid.y))
 
-        reflected_x_points = {Point(c) for c in cake_reflected_x.boundary.coords}
-        reflected_y_points = {Point(c) for c in cake_reflected_y.boundary.coords}
+        reflected_x_points = {Point(co) for co in cake_reflected_x.boundary.coords}
+        reflected_y_points = {Point(co) for co in cake_reflected_y.boundary.coords}
 
         symmetric_x = reflected_x_points == cake_boundary_points
         symmetric_y = reflected_y_points == cake_boundary_points
