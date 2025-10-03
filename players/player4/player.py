@@ -1,4 +1,6 @@
 from shapely import Point, Polygon
+from shapely.affinity import scale
+from typing import Literal
 
 from players.player import Player
 from src.cake import Cake
@@ -16,6 +18,7 @@ class Player4(Player):
         print(f"Ideal area per piece: {self.ideal_area_per_piece}")
         print(self.cake_boundary)
         print(cake.get_boundary_points())
+        print(self._is_cake_symmetric())
 
 
     def get_cuts(self) -> list[tuple[Point, Point]]:
@@ -33,7 +36,29 @@ class Player4(Player):
             # Comment: it doesn't have to be the second piece, this is only true bc we cut vertically from left to right
             print(f"Current cake border: {self.current_cake_to_cut.boundary}")
         return cuts_res
-    
+
+    def _is_cake_symmetric(self) -> Literal['symmetric_x', 'symmetric_y', 'symmetric_both', False]:
+        cake_centroid = self.cake.exterior_shape.centroid
+        cake_boundary_points = {Point(c) for c in self.cake.exterior_shape.boundary.coords}
+
+        cake_reflected_x = scale(self.cake.exterior_shape, xfact=1, yfact=-1, origin=(cake_centroid.x, cake_centroid.y))
+        cake_reflected_y = scale(self.cake.exterior_shape, xfact=-1, yfact=1, origin=(cake_centroid.x, cake_centroid.y))
+
+        reflected_x_points = {Point(c) for c in cake_reflected_x.boundary.coords}
+        reflected_y_points = {Point(c) for c in cake_reflected_y.boundary.coords}
+
+        symmetric_x = reflected_x_points == cake_boundary_points
+        symmetric_y = reflected_y_points == cake_boundary_points
+
+        if symmetric_x and symmetric_y:
+            return 'symmetric_both'
+        elif symmetric_x:
+            return 'symmetric_x'
+        elif symmetric_y:
+            return 'symmetric_y'
+        else:
+            return False
+
     def _check_cake_area_ratio(self, piece_done: Polygon, piece_rest: Polygon, pieces_left: int) -> bool:
         piece_done_area_diff = abs(piece_done.area - self.ideal_area_per_piece)
         piece_rest_area_diff = abs(piece_rest.area - self.ideal_area_per_piece * pieces_left)
