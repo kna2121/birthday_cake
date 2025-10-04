@@ -1,5 +1,5 @@
 from shapely import Point, Polygon, LineString
-from shapely.ops import split
+from shapely.ops import split, linemerge
 from shapely.affinity import scale
 from typing import Literal
 
@@ -7,36 +7,21 @@ from players.player import Player
 from src.cake import Cake
 import src.constants as c
 import os
+from math import floor, ceil
 
 
 class Player4(Player):
     def __init__(self, children: int, cake: Cake, cake_path: str | None) -> None:
         super().__init__(children, cake, cake_path)
-        self.ideal_area_per_piece = cake.get_area() / children
-        self.total_cuts = children - 1
-        self.cake_boundary = cake.exterior_shape.boundary
+        self.ideal_area_per_piece: float = cake.get_area() / children
+        self.total_cuts: int = children - 1
+        self.cake_crust: LineString = cake.exterior_shape.boundary
         self.current_cake_to_cut = cake
 
-        print(f"Ideal area per piece: {self.ideal_area_per_piece}")
+        # print(f"Ideal area per piece: {self.ideal_area_per_piece}")
         print(cake.get_boundary_points())
+        print(cake.exterior_shape)
         print(self._is_cake_symmetric())
-
-
-    # def get_cuts(self) -> list[tuple[Point, Point]]:
-    #     cuts_res = []
-        
-    #     # cut until I have piece with 1/n area and another n-1/n area
-    #     # then repeat the same with n-1/n piece
-    #     for cut in range(1, self.total_cuts+1):
-    #         print(f"Making cut {cut}/{self.total_cuts}")
-    #         a, b = self._find_proper_cut(self.children - cut)
-    #         cuts_res.append((a, b))
-    #         self.cake.cut(a, b)
-    #         # print(self.current_cake_to_cut.exterior_pieces[0].boundary, self.current_cake_to_cut.exterior_pieces[1].boundary)
-    #         self.current_cake_to_cut = max(self.cake.exterior_pieces, key=lambda p: p.area) 
-    #         # Comment: it doesn't have to be the second piece, this is only true bc we cut vertically from left to right
-    #         print(f"Current cake border: {self.current_cake_to_cut.boundary}")
-    #     return cuts_res
 
     def _cut_rectangle_even(self):
         # find cut through center of cake first
@@ -63,15 +48,112 @@ class Player4(Player):
             cuts.append((Point(cut_right.coords[0]), Point(cut_right.coords[1])))
 
             return cuts
+    
+    def _cut_rectangle(self, current_cake: Polygon, children: int):
+        print(f"cutting rectangle with {children} children remaining.")
+        cut_sequence: list[tuple[Point, Point]] = []
+
+        # base case of recursion 
+        if children == 1:
+            return cut_sequence
+        
+        minx, miny, maxx, maxy = self._get_bounds(self.cake)
+        length = maxx - minx
+
+        minx_curr, miny_curr, maxx_curr, maxy_curr = self._get_bounds(current_cake)
+        print(f"Current cake bounds: minx {minx_curr}, miny {miny_curr}, maxx {maxx_curr}, maxy {maxy_curr}")
+
+        current_crust = linemerge(self.cake_crust.intersection(current_cake.boundary))
+        cake_centroid = self.cake.exterior_shape.centroid
+        print(f"current crust: {current_crust}")
+        # If two (or generally even number of) children left, then cut into two pieces with both having same area
+        # either horizontal cut or angular (if 8 children total)
+        if children % 2 == 0:
+            # find out how much crust is left
+            # get the intersection of current cake and 
+            # find perfect cut to split crust
+            if current_crust == self.cake_crust:    # make sure points in right order
+                # cut vertical in middle
+                print("full crust left, cutting vertically in middle")
+                next_cut = LineString([(cake_centroid.x, miny), (cake_centroid.x, maxy)])
+                
+            else:
+                # get length of crust
+                crust_len_per_piece = current_crust.length / children
+                # cut according to size of crust and connect to centroid
+                from_p = current_crust.interpolate(crust_len_per_piece)
+                # point where line interects a non-crust opposite side
+                to_p = cake_centroid
+                next_cut = LineString([from_p, to_p])
+                print(f"next cut before check: {next_cut}")
+                if not to_p.intersects(current_crust):
+                    print("cut doesn't intersect cake, adjusting")
+                    if from_p.x < cake_centroid.x:
+                        to_p = Point(maxx_curr, cake_centroid.y)
+                    else:
+                        to_p = Point(minx_curr, cake_centroid.y)
+                    next_cut = LineString([from_p, to_p])
+                    # print(f"Next cut after adjustment: {next_cut}")
+
+            print(f"Next cut here: {next_cut}")
+            children_left = children / 2
+            split_pieces = split(current_cake, next_cut)
+            subpiece1, subpiece2 = split_pieces.geoms
+            cuts1 = self._cut_rectangle(subpiece1, children_left)
+            cuts2 = self._cut_rectangle(subpiece2, children_left)
+        
+        # If children left is 3 and piece is not fully surrounded by crust, then do following
+        # go from one point in line and move along the curst thirdway and connect this point to center point on other side (not crust)
+        # do same from other side
+
+        # else if children odd then divide into two pieces, 1 piece for even number of children, 1 for odd number of children
+        else:
+            children_left = [floor(children/2), ceil(children/2)]
+            # cut cake vertically in two pieces if still full crust
+            if current_crust == self.cake_crust:    # make sure points in right order
+                # cut vertical in middle
+                
+                start_distance = self.cake_crust.project(Point(minx, miny))
+                # print(f"children left: {children_left}, length: {length}")
+                # print(f"Start distance on crust: {start_distance}, go to {start_distance + (children_left[0] / children) * length}")
+                from_p = current_crust.interpolate(start_distance + (children_left[0] / children) * length)
+                to_p = (from_p.x, maxy)
+                next_cut = LineString([from_p, to_p])
+
+            else:
+                # get length of crust
+                crust_len_per_piece = current_crust.length / children 
+                # cut according to size of crust and connect to centroid
+                from_p = current_crust.interpolate(crust_len_per_piece * children_left[0])
+                to_p = cake_centroid
+                next_cut = LineString([from_p, to_p])
+                if not to_p.intersects(current_crust):
+                    print("cut doesn't intersect cake, adjusting")
+                    if from_p.x < cake_centroid.x:
+                        to_p = Point(maxx_curr, cake_centroid.y)
+                    else:
+                        to_p = Point(minx_curr, cake_centroid.y)
+                    next_cut = LineString([from_p, to_p])
+
+            print(f"Next cut here: {next_cut}")
+            split_pieces = split(current_cake, next_cut)
+            subpiece1, subpiece2 = split_pieces.geoms
+            if subpiece1.area > subpiece2.area:
+                subpiece1, subpiece2 = subpiece2, subpiece1
+            cuts1 = self._cut_rectangle(subpiece1, children_left[0])
+            cuts2 = self._cut_rectangle(subpiece2, children_left[1])
+
+        print(f"Next cut: {next_cut}")
+        cut_sequence = [(Point(next_cut.coords[0]), Point(next_cut.coords[1]))] + cuts1 + cuts2
+        return cut_sequence
+         
 
     
     def get_cuts(self) -> list[tuple[Point, Point]]:
-        piece: Polygon = self.cake.exterior_shape
         if os.path.basename(self.cake_path) == "rectangle.csv":
-            return self._cut_rectangle_even()
-        print(f"Player 4: Starting DFS for {self.children} children.")
-        return self.DFS(piece, self.children)
-
+            cuts = self._cut_rectangle(self.cake.exterior_shape, self.children)
+            print(f"Final cuts: {cuts}")
+            return cuts
 
     def _is_cake_symmetric(self) -> Literal['symmetric_x', 'symmetric_y', 'symmetric_both', False]:
         cake_centroid = self.cake.exterior_shape.centroid
@@ -139,10 +221,26 @@ class Player4(Player):
         return cake_cpy.exterior_pieces
 
 
-    def _get_bounds(self):
-        cake_boundary_points = self.current_cake_to_cut.get_boundary_points() if isinstance(self.current_cake_to_cut, Cake) else [Point(c) for c in self.current_cake_to_cut.boundary.coords]
+    def _get_bounds(self, current_cake: Polygon) -> tuple[float, float, float, float]:
+        cake_boundary_points = current_cake.get_boundary_points() if isinstance(current_cake, Cake) else [Point(c) for c in current_cake.boundary.coords]
         min_x = min(point.x for point in cake_boundary_points)
         min_y = min(point.y for point in cake_boundary_points)
         max_x = max(point.x for point in cake_boundary_points)
         max_y = max(point.y for point in cake_boundary_points)
         return min_x, min_y, max_x, max_y
+
+        # def get_cuts(self) -> list[tuple[Point, Point]]:
+    #     cuts_res = []
+        
+    #     # cut until I have piece with 1/n area and another n-1/n area
+    #     # then repeat the same with n-1/n piece
+    #     for cut in range(1, self.total_cuts+1):
+    #         print(f"Making cut {cut}/{self.total_cuts}")
+    #         a, b = self._find_proper_cut(self.children - cut)
+    #         cuts_res.append((a, b))
+    #         self.cake.cut(a, b)
+    #         # print(self.current_cake_to_cut.exterior_pieces[0].boundary, self.current_cake_to_cut.exterior_pieces[1].boundary)
+    #         self.current_cake_to_cut = max(self.cake.exterior_pieces, key=lambda p: p.area) 
+    #         # Comment: it doesn't have to be the second piece, this is only true bc we cut vertically from left to right
+    #         print(f"Current cake border: {self.current_cake_to_cut.boundary}")
+    #     return cuts_res
