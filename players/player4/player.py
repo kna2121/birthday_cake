@@ -1,3 +1,4 @@
+import random
 from shapely import LineString, Point, Polygon
 from shapely.ops import split
 
@@ -26,7 +27,12 @@ class Player4(Player):
         if not valid_cuts:
             return None
         
-        for from_p, to_p in valid_cuts:
+        cut_to_try: tuple[Point, Point]
+        while valid_cuts:
+            cut_to_try = valid_cuts[random.randint(0, len(valid_cuts) - 1)]
+            valid_cuts.remove(cut_to_try)
+            from_p = cut_to_try[0]
+            to_p = cut_to_try[1]
             line = LineString([from_p, to_p])
             split_pieces = split(piece, line)
             if len(split_pieces.geoms) != 2:
