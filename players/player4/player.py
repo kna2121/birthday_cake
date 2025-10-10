@@ -23,9 +23,67 @@ class Player4(Player):
         print(f"Max area per piece: {self.max_area_per_piece}")
 
     def get_cuts(self) -> list[tuple[Point, Point]]:
-        cuts = self._cut_basic_cake(self.cake.exterior_shape, self.children)
+        cuts = self.get_mushroom_cuts() 
+        # cuts = self._cut_basic_cake(self.cake.exterior_shape, self.children)
         return cuts
 
+    def get_mushroom_cuts(self) -> list[tuple[Point, Point]]:
+        cuts: list[tuple[Point, Point]] = []
+        assert self.children == 6, "Pre-set mushroom cake can only serve 6 children!"  
+
+        cake_centroid = self.cake.exterior_shape.centroid
+        minx, miny, maxx, maxy = self._get_bounds(self.cake)
+
+        # first cut vertically down the middle
+        first_v_cut = LineString([(cake_centroid.x, miny), (cake_centroid.x, maxy)])
+        v_cut_p1, v_cut_p2 = Point(first_v_cut.coords[0]), Point(first_v_cut.coords[1])
+        cuts.append((v_cut_p1, v_cut_p2))
+
+        # Get the two halves
+        split_halves = split(self.cake.exterior_shape, first_v_cut)
+
+        # Cut the halves in pieces with good ratio and area
+        cuts_per_halve = self.children // 2
+        center_upper_p = Point(cake_centroid.x, 0)
+
+        for i, piece in enumerate(split_halves.geoms):
+            # Get crust of current half
+            current_crust = linemerge(self.cake_crust.intersection(piece.boundary))
+            if not center_upper_p.equals(Point(current_crust.coords[0])):
+                current_crust = LineString(list(current_crust.coords)[::-1])
+          
+            crust_len_per_piece = current_crust.length / cuts_per_halve
+            current_piece = piece
+            for cut in range(1, cuts_per_halve):
+                from_p = current_crust.interpolate(crust_len_per_piece * cut)
+                from_p = current_crust.interpolate(current_crust.project(from_p))
+                to_p = cake_centroid
+
+                def adjust_to_fit_area(piece, from_p, to_p):
+                    max_steps = 100
+                    step = 0.1
+                    for _ in range(max_steps):
+                        test_cut = LineString([to_p, from_p])
+                        split_pieces = split(piece, test_cut)
+                        top_piece, bottom_piece = sorted(split_pieces.geoms, key=lambda p: p.centroid.y)
+                        
+                        # Check if area of top piece is within bounds and adjust to_p accordingly
+                        if self.min_area_per_piece <= top_piece.area <= self.max_area_per_piece:
+                            return to_p, top_piece, bottom_piece
+                        if top_piece.area > self.max_area_per_piece:
+                            to_p = Point(to_p.x, to_p.y - step)
+                        else:
+                            to_p = Point(to_p.x, to_p.y + step)
+
+                    return to_p, top_piece, bottom_piece
+
+                to_p, _, bottom_piece = adjust_to_fit_area(current_piece, from_p, to_p)
+                cuts.append((from_p, to_p))
+                if bottom_piece is not None:
+                    current_piece = bottom_piece
+
+        return cuts
+    
     def _cut_basic_cake(self, current_cake: Polygon, children: int):
         print(f"\ncutting with {children} children remaining.")
         cut_sequence: list[tuple[Point, Point]] = []
@@ -91,18 +149,15 @@ class Player4(Player):
                 else:
                     bottom_piece, top_piece = sorted(split_pieces.geoms, key=lambda p: p.centroid.y)
 
-
                     print(f"bottom piece area: {bottom_piece.area}, top piece area: {top_piece.area}")
-
-                
                     if bottom_piece.area < top_piece.area:
                         fixed_side = "bottom"
-                        reference_piece = bottom_piece
+                        
                     else:
                         fixed_side = "top"
-                        reference_piece = top_piece
+                       
 
-                print(f"Fixed side for area adjustment: {fixed_side}")#, initial area={reference_piece.area}")
+                print(f"Fixed side for area adjustment: {fixed_side}")
 
                 # Try to find vertical offset (up/down) from centroid to match target area
                 best_to_p = cake_centroid
@@ -111,7 +166,6 @@ class Player4(Player):
                 minx_c, miny_c, maxx_c, maxy_c = current_cake.bounds
                 height = maxy_c - miny_c
 
-                # Step 1: function to compute area difference for a given vertical offset
                 def area_diff_for_offset(offset_y: float) -> float | None:
                     test_to_p = Point(cake_centroid.x, cake_centroid.y + offset_y)
                     test_cut = LineString([from_p, test_to_p])
@@ -133,8 +187,6 @@ class Player4(Player):
                     except Exception:
                         return None
 
-
-                # Step 2: test small up/down offsets to decide direction
                 dy_test = 0.05 * height
                 diff_up = area_diff_for_offset(dy_test)
                 diff_down = area_diff_for_offset(-dy_test)
