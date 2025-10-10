@@ -7,9 +7,9 @@ def get_rocket_cuts(self) -> list[tuple[Point, Point]]:
 
     poly = self.cake.exterior_shape
     total_area = poly.area
-    target_area_per_band = total_area / 3  # 3 horizontal layers → 6 total pieces
+    target_area_per_band = total_area / 3  # 3 horizontal layers 
 
-    # --- 1️⃣ helper to compute area below a horizontal line
+    # compute area below a horizontal line
     def area_below_y(y):
         line = LineString([(-1e6, y), (1e6, y)])
         pieces = split(poly, line)
@@ -20,7 +20,7 @@ def get_rocket_cuts(self) -> list[tuple[Point, Point]]:
             return total_area if y >= poly.bounds[3] else 0
         return 0
 
-    # --- 2️⃣ binary search for equal-area y levels
+    # binary search for equal-area y levels
     def find_y_for_target(target):
         lo, hi = poly.bounds[1], poly.bounds[3]
         for _ in range(50):
@@ -37,7 +37,7 @@ def get_rocket_cuts(self) -> list[tuple[Point, Point]]:
     y1 = find_y_for_target(target_area_per_band)
     y2 = find_y_for_target(2 * target_area_per_band)
 
-    # --- 3️⃣ snap those lines to polygon boundary
+    # snap those lines to polygon boundary
     def chord_within_poly(y):
         line = LineString([(-1e6, y), (1e6, y)])
         seg = poly.intersection(line)
@@ -46,7 +46,7 @@ def get_rocket_cuts(self) -> list[tuple[Point, Point]]:
         p1, p2 = list(seg.coords)
         return Point(*p1), Point(*p2)
 
-    # --- 4️⃣ vertical center cut
+    # vertical center cut
     v_line = LineString([(10, -1e6), (10, 1e6)])
     v_seg = poly.intersection(v_line)
     if v_seg.geom_type == "MultiLineString":
@@ -54,11 +54,11 @@ def get_rocket_cuts(self) -> list[tuple[Point, Point]]:
     vp1, vp2 = list(v_seg.coords)
     vertical_cut = (Point(*vp1), Point(*vp2))
 
-    # --- 5️⃣ two horizontal equal-area chords
+    # two horizontal equal-area chords
     h1_left, h1_right = chord_within_poly(y1)
     h2_left, h2_right = chord_within_poly(y2)
 
-    # --- 6️⃣ make each horizontal stop at the vertical cut
+    #  make each horizontal stop at the vertical cut
     v_cross1 = Point(10, y1)
     v_cross2 = Point(10, y2)
 
@@ -70,5 +70,4 @@ def get_rocket_cuts(self) -> list[tuple[Point, Point]]:
         (h2_left, v_cross2),           # upper-left horizontal
         (v_cross2, h2_right)           # upper-right horizontal
     ]
-    print(cuts)
     return cuts
