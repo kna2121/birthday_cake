@@ -63,12 +63,16 @@ class Player4(Player):
             else:
                 crust_len_per_piece = current_crust.length / children
 
-                print(f"current crust HERE: {current_crust}, move for {crust_len_per_piece * floor(children / 2)}")
+                # print(f"current cake HERE: {current_cake.boundary}, move for {crust_len_per_piece * floor(children / 2)}")
 
                 # Cut from point on crust
                 from_p = current_crust.interpolate(
                     crust_len_per_piece * floor(children / 2)    # Floor in case of odd number of children
                 )
+
+                from_p = current_cake.boundary.interpolate(current_cake.boundary.project(from_p))
+
+
                 to_p = cake_centroid
                 # Pick point on interior on opposite side of cake based on area
                 # Try to find a to_p that yields approximately equal-area pieces
@@ -80,22 +84,25 @@ class Player4(Player):
                 # Initial split to identify which side (top/bottom) is the smaller piece
                 split_pieces = split(Polygon(current_cake.exterior.coords), test_cut)
                 if len(split_pieces.geoms) < 2:
-                    print(f"cut {test_cut} doesn't split cake!")
-                    print(from_p.touches(self.cake_crust), to_p.touches(self.cake_crust))
-                    print(split_pieces)
-                bottom_piece, top_piece = sorted(split_pieces.geoms, key=lambda p: p.centroid.y)
-
-
-                print(f"bottom piece area: {bottom_piece.area}, top piece area: {top_piece.area}")
-
-                if bottom_piece.area < top_piece.area:
-                    fixed_side = "bottom"
-                    reference_piece = bottom_piece
-                else:
                     fixed_side = "top"
-                    reference_piece = top_piece
+                    # print(f"cut {test_cut} doesn't split cake!")
+                    # print(current_cake.boundary.intersection(test_cut))
+                    # print(split_pieces)
+                else:
+                    bottom_piece, top_piece = sorted(split_pieces.geoms, key=lambda p: p.centroid.y)
 
-                print(f"Fixed side for area adjustment: {fixed_side}, initial area={reference_piece.area}")
+
+                    print(f"bottom piece area: {bottom_piece.area}, top piece area: {top_piece.area}")
+
+                
+                    if bottom_piece.area < top_piece.area:
+                        fixed_side = "bottom"
+                        reference_piece = bottom_piece
+                    else:
+                        fixed_side = "top"
+                        reference_piece = top_piece
+
+                print(f"Fixed side for area adjustment: {fixed_side}")#, initial area={reference_piece.area}")
 
                 # Try to find vertical offset (up/down) from centroid to match target area
                 best_to_p = cake_centroid
@@ -108,16 +115,20 @@ class Player4(Player):
                 def area_diff_for_offset(offset_y: float) -> float | None:
                     test_to_p = Point(cake_centroid.x, cake_centroid.y + offset_y)
                     test_cut = LineString([from_p, test_to_p])
+                    # print(f"test_cut: {test_cut}")
                     try:
                         current_cake_copy = Polygon(current_cake.exterior.coords)
                         split_pieces = split(current_cake_copy, test_cut)
                         if len(split_pieces.geoms) < 2:
+                            # print(f"{test_cut} not cutting cake {current_cake_copy}")
+                            print(current_cake.boundary.intersection(test_cut))
                             return None
 
                         # Always pick the same side based on centroid.y
+                        # print("cutting cake!")
                         bottom_piece, top_piece = sorted(split_pieces.geoms, key=lambda p: p.centroid.y)
                         smaller_piece = bottom_piece if fixed_side == "bottom" else top_piece
-                        # print(f"Testing {test_to_p}: smaller piece area = {smaller_piece.area}")
+                        print(f"Testing {test_to_p}: smaller piece area = {smaller_piece.area}")
                         return smaller_piece.area - target_area
                     except Exception:
                         return None
@@ -127,7 +138,7 @@ class Player4(Player):
                 dy_test = 0.05 * height
                 diff_up = area_diff_for_offset(dy_test)
                 diff_down = area_diff_for_offset(-dy_test)
-
+                print(f"Area diffs for small offsets {dy_test}: up={diff_up}, down={diff_down}")
                 if diff_up is None and diff_down is None:
                     # fallback to centroid
                     to_p = best_to_p
@@ -146,6 +157,7 @@ class Player4(Player):
                         if diff is not None and abs(diff) < best_area_diff:
                             best_area_diff = abs(diff)
                             best_to_p = Point(cake_centroid.x, cake_centroid.y + offset_y)
+                            print(f"trying out point {best_to_p}")
 
                         # stop early if area is within acceptable bounds
                         smaller_piece_area = target_area + diff
