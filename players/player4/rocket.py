@@ -3,6 +3,8 @@ from shapely.ops import split
 
 
 def get_rocket_cuts(self) -> list[tuple[Point, Point]]:
+
+
     poly = self.cake.exterior_shape
     total_area = poly.area
     target_area_per_band = total_area / 3  # 3 horizontal layers → 6 total pieces

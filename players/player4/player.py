@@ -12,9 +12,9 @@ class Player4(Player):
         super().__init__(children, cake, cake_path)
 
     def get_cuts(self) -> list[tuple[Point, Point]]:
-        if self.cake_path == '/Users/kiraariyan/Desktop/COMS4444/birthday_cake/cakes/players/player4/rocket_creative.csv':
+        if 'rocket_creative.csv' in self.cake_path and self.children == 6:
             return get_rocket_cuts(self)
-        if 'hilbert_challenging.csv' in self.cake_path:
+        if 'hilbert_challenging.csv' in self.cake_path and self.children == 31:
             return get_hilbert_cuts(self)
         piece: Polygon = self.cake.exterior_shape
         n = self.children
