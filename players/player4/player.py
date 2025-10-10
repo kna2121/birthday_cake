@@ -17,10 +17,10 @@ class Player4(Player):
         self.cake_crust: LineString = cake.exterior_shape.boundary
 
     def get_cuts(self) -> list[tuple[Point, Point]]:
-        if (
-            os.path.basename(self.cake_path) == "rectangle.csv"
-            or os.path.basename(self.cake_path) == "square.csv"
-        ):
+        # if (
+        #     os.path.basename(self.cake_path) == "rectangle.csv"
+        #     or os.path.basename(self.cake_path) == "square.csv"
+        # ):
             cuts = self._cut_rectangular_cake(self.cake.exterior_shape, self.children)
             return cuts
 
@@ -44,7 +44,7 @@ class Player4(Player):
             next_cut: LineString = None
 
             # Do we still have the full crust?
-            if current_crust == self.cake_crust:
+            if self._is_full_crust_left(current_cake):
                 print("full crust left, cutting vertically in middle")
                 if even_split:
                     next_cut = LineString(
@@ -108,6 +108,12 @@ class Player4(Player):
             [(Point(next_cut.coords[0]), Point(next_cut.coords[1]))] + cuts1 + cuts2
         )
         return cut_sequence
+    
+    def _is_full_crust_left(self, current_cake: Polygon) -> bool:
+        current_crust = linemerge(self.cake_crust.intersection(current_cake.boundary))
+        current_crust_points = set(Point(co) for co in current_crust.coords)
+        cake_crust_points = set(Point(co) for co in self.cake_crust.coords)
+        return current_crust_points == cake_crust_points
 
     def _is_cake_symmetric(
         self,
