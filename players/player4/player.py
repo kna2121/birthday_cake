@@ -4,6 +4,7 @@ from shapely.ops import split
 from players.player import Player
 from src.cake import Cake
 from players.player4.rocket import get_rocket_cuts
+from players.player4.hilbert import get_hilbert_cuts
 
 
 class Player4(Player):
@@ -13,6 +14,8 @@ class Player4(Player):
     def get_cuts(self) -> list[tuple[Point, Point]]:
         if self.cake_path == '/Users/kiraariyan/Desktop/COMS4444/birthday_cake/cakes/players/player4/rocket_creative.csv':
             return get_rocket_cuts(self)
+        if 'hilbert_challenging.csv' in self.cake_path:
+            return get_hilbert_cuts(self)
         piece: Polygon = self.cake.exterior_shape
         n = self.children
         total_area = piece.area
