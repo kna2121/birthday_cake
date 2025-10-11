@@ -65,8 +65,6 @@ class Player4(Player):
             else:
                 crust_len_per_piece = current_crust.length / children
 
-                # print(f"current cake HERE: {current_cake.boundary}, move for {crust_len_per_piece * floor(children / 2)}")
-
                 # Cut from point on crust
                 from_p = current_crust.interpolate(
                     crust_len_per_piece * floor(children / 2)    # Floor in case of odd number of children
@@ -79,7 +77,6 @@ class Player4(Player):
                 # Pick point on interior on opposite side of cake based on area
                 # Try to find a to_p that yields approximately equal-area pieces
                 target_area = self.ideal_area_per_piece * floor(children / 2)
-                print(f"Target area for smaller piece: {target_area}")
 
                 # test cut to find smaller area piece
                 test_cut = LineString([from_p, to_p])
@@ -99,8 +96,7 @@ class Player4(Player):
                         
                     else:
                         fixed_side = "top"
-                       
-
+                    
                 print(f"Fixed side for area adjustment: {fixed_side}")
 
                 # Try to find vertical offset (up/down) from centroid to match target area
