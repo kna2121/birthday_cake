@@ -117,13 +117,14 @@ class Player4(Player):
         if children == 1:
             return []
 
-        piece_is_convex = utils.piece_is_convex(piece)
-        if piece_is_convex:
-            print("Piece is convex, using optimized cut generation.")
-            cuts = self.generate_and_filter_cuts_convex(piece, children)
-        else:
-            print("Piece is not convex, using standard cut generation.")
-            cuts = self.generate_and_filter_cuts(piece, children)
+        # piece_is_convex = utils.piece_is_convex(piece)
+        # if piece_is_convex:
+        #     print("Piece is convex, using optimized cut generation.")
+        #     cuts = self.generate_and_filter_cuts_convex(piece, children)
+        # else:
+        #     print("Piece is not convex, using standard cut generation.")
+        #     cuts = self.generate_and_filter_cuts(piece, children)
+        cuts = self.generate_and_filter_cuts(piece, children)
 
         cut_sequence: list[tuple[Point, Point]] = []
         cuts_tried = 0
@@ -311,11 +312,6 @@ class Player4(Player):
 
                             except Exception:
                                 continue
-
-                # If we found a very good cut, we can stop early for this angle
-                if min_ratio_err_found < 0.0125:
-                    # print(f"Early stopping sweep at angle {angle_deg} due to good cut.")
-                    break
 
         # Lower error is better
         print(f"Found {len(candidate_cuts)} cuts.")
